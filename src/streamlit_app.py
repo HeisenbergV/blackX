@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 from src.backtest.strategy_engine import StrategyEngine
 import akshare as ak
 import numpy as np
+import yaml
+import os
+from pathlib import Path
 
 # 设置页面配置
 st.set_page_config(
@@ -13,11 +16,36 @@ st.set_page_config(
     layout="wide"
 )
 
+# 创建策略目录
+STRATEGY_DIR = Path("src/strategies/user_strategies")
+STRATEGY_DIR.mkdir(parents=True, exist_ok=True)
+
+# 加载所有策略配置
+def load_all_strategies():
+    """加载所有策略配置"""
+    strategies = {}
+    
+    # 从 user_strategies 目录加载所有策略
+    for strategy_file in STRATEGY_DIR.glob("*.y*ml"):  # 支持 .yaml 和 .yml
+        with open(strategy_file, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            strategies.update(config.get('strategies', {}))
+    
+    return strategies
+
+# 保存用户策略
+def save_user_strategy(file_content, filename):
+    """保存用户上传的策略"""
+    file_path = STRATEGY_DIR / filename
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(file_content)
+    return file_path
+
 # 创建侧边栏导航
 st.sidebar.title("导航")
 page = st.sidebar.radio(
     "选择功能",
-    ["股票数据查看", "策略回测"]
+    ["股票数据查看", "策略回测", "策略管理"]
 )
 
 # 股票选择（共用）
@@ -101,20 +129,25 @@ if data is not None:
         st.subheader("历史数据")
         st.dataframe(data)
         
-    else:  # 策略回测页面
+    elif page == "策略回测":
         st.title("策略回测系统")
+        
+        # 加载所有策略
+        all_strategies = load_all_strategies()
         
         # 策略选择
         st.sidebar.header("策略配置")
-        selected_strategies = st.sidebar.multiselect(
+        strategy_names = [f"{name} ({config['name']})" 
+                         for name, config in all_strategies.items()]
+        selected_strategy_names = st.sidebar.multiselect(
             "选择策略",
-            ["双均线策略", "RSI策略", "布林带策略"],
-            default=["双均线策略"]
+            strategy_names,
+            default=[strategy_names[0]] if strategy_names else []
         )
         
         if st.sidebar.button("开始回测"):
             # 初始化策略引擎
-            engine = StrategyEngine('src/strategies/strategy_config.yaml')
+            engine = StrategyEngine()  # 不指定配置文件，自动加载所有策略
             
             # 执行回测
             results = engine.backtest(
@@ -140,20 +173,14 @@ if data is not None:
                 ))
                 
                 # 添加策略收益
-                for strategy in selected_strategies:
-                    if strategy == "双均线策略":
-                        strategy_name = "ma_crossover"
-                    elif strategy == "RSI策略":
-                        strategy_name = "rsi_strategy"
-                    else:
-                        strategy_name = "bollinger_bands"
-                        
+                for strategy in selected_strategy_names:
+                    strategy_name = strategy.split(' ')[0]
                     if strategy_name in results:
                         strategy_returns = (1 + results[strategy_name]['returns']).cumprod() * 100
                         fig.add_trace(go.Scatter(
                             x=strategy_returns.index,
                             y=strategy_returns,
-                            name=f"{strategy}收益"
+                            name=strategy
                         ))
                 
                 fig.update_layout(
@@ -167,14 +194,8 @@ if data is not None:
                 # 显示策略统计信息
                 st.subheader("策略统计")
                 stats_data = []
-                for strategy in selected_strategies:
-                    if strategy == "双均线策略":
-                        strategy_name = "ma_crossover"
-                    elif strategy == "RSI策略":
-                        strategy_name = "rsi_strategy"
-                    else:
-                        strategy_name = "bollinger_bands"
-                        
+                for strategy in selected_strategy_names:
+                    strategy_name = strategy.split(' ')[0]
                     if strategy_name in results:
                         returns = results[strategy_name]['returns']
                         total_return = (1 + returns).prod() - 1
@@ -194,20 +215,14 @@ if data is not None:
                 # 绘制持仓变化
                 fig = go.Figure()
                 
-                for strategy in selected_strategies:
-                    if strategy == "双均线策略":
-                        strategy_name = "ma_crossover"
-                    elif strategy == "RSI策略":
-                        strategy_name = "rsi_strategy"
-                    else:
-                        strategy_name = "bollinger_bands"
-                        
+                for strategy in selected_strategy_names:
+                    strategy_name = strategy.split(' ')[0]
                     if strategy_name in results:
                         positions = results[strategy_name]['positions']
                         fig.add_trace(go.Scatter(
                             x=positions.index,
                             y=positions['position'],
-                            name=f"{strategy}持仓",
+                            name=strategy,
                             line=dict(width=2)
                         ))
                 
@@ -234,14 +249,8 @@ if data is not None:
                 ))
                 
                 # 添加交易信号
-                for strategy in selected_strategies:
-                    if strategy == "双均线策略":
-                        strategy_name = "ma_crossover"
-                    elif strategy == "RSI策略":
-                        strategy_name = "rsi_strategy"
-                    else:
-                        strategy_name = "bollinger_bands"
-                        
+                for strategy in selected_strategy_names:
+                    strategy_name = strategy.split(' ')[0]
                     if strategy_name in results:
                         signals = results[strategy_name]['signals']
                         buy_signals = signals[signals['signal'] == 1]
@@ -269,4 +278,55 @@ if data is not None:
                     yaxis_title="价格",
                     height=500
                 )
-                st.plotly_chart(fig, use_container_width=True) 
+                st.plotly_chart(fig, use_container_width=True)
+            
+    else:  # 策略管理页面
+        st.title("策略管理")
+        
+        # 策略导入
+        st.header("导入策略")
+        uploaded_file = st.file_uploader("上传策略配置文件（YAML格式）", type=['yaml', 'yml'])
+        
+        if uploaded_file is not None:
+            try:
+                # 读取文件内容
+                file_content = uploaded_file.getvalue().decode('utf-8')
+                
+                # 验证YAML格式
+                yaml.safe_load(file_content)
+                
+                # 保存文件
+                filename = uploaded_file.name
+                save_path = save_user_strategy(file_content, filename)
+                
+                st.success(f"策略文件已成功导入：{save_path}")
+                
+                # 显示策略预览
+                st.subheader("策略预览")
+                st.code(file_content, language='yaml')
+                
+            except yaml.YAMLError as e:
+                st.error(f"YAML格式错误：{str(e)}")
+            except Exception as e:
+                st.error(f"导入失败：{str(e)}")
+        
+        # 显示现有策略
+        st.header("现有策略")
+        all_strategies = load_all_strategies()
+        
+        for strategy_id, strategy_config in all_strategies.items():
+            with st.expander(f"{strategy_config['name']} ({strategy_id})"):
+                st.write(f"描述: {strategy_config.get('description', '无描述')}")
+                st.write("参数:")
+                st.json(strategy_config.get('parameters', {}))
+                
+                # 添加删除按钮
+                if st.button(f"删除策略 {strategy_config['name']}", key=f"delete_{strategy_id}"):
+                    # 找到并删除对应的策略文件
+                    for strategy_file in STRATEGY_DIR.glob("*.y*ml"):
+                        with open(strategy_file, 'r', encoding='utf-8') as f:
+                            config = yaml.safe_load(f)
+                            if strategy_id in config.get('strategies', {}):
+                                os.remove(strategy_file)
+                                st.success(f"已删除策略: {strategy_config['name']}")
+                                st.rerun()  # 使用新的 rerun API 

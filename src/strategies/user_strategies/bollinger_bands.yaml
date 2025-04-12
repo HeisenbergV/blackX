@@ -1,0 +1,25 @@
+strategies:
+  bollinger_bands:
+    name: "布林带策略"
+    description: "使用布林带的价格突破作为交易信号"
+    parameters:
+      window: 20
+      num_std: 2
+    indicators:
+      - name: "布林带"
+        code: |
+          data['middle_band'] = data['close'].rolling(window=params['window']).mean()
+          data['std'] = data['close'].rolling(window=params['window']).std()
+          data['upper_band'] = data['middle_band'] + params['num_std'] * data['std']
+          data['lower_band'] = data['middle_band'] - params['num_std'] * data['std']
+        params:
+          window: 20
+          num_std: 2
+    signals:
+      buy:
+        code: "data['close'] < data['lower_band']"
+      sell:
+        code: "data['close'] > data['upper_band']"
+    position_sizing:
+      type: "fixed"
+      value: 0.1 

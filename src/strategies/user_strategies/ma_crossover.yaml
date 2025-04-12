@@ -1,0 +1,26 @@
+strategies:
+  ma_crossover:
+    name: "双均线交叉策略"
+    description: "使用短期和长期均线的交叉作为交易信号"
+    parameters:
+      short_window: 5
+      long_window: 20
+    indicators:
+      - name: "短期均线"
+        code: |
+          data['short_ma'] = data['close'].rolling(window=params['short_window']).mean()
+        params:
+          short_window: 5
+      - name: "长期均线"
+        code: |
+          data['long_ma'] = data['close'].rolling(window=params['long_window']).mean()
+        params:
+          long_window: 20
+    signals:
+      buy:
+        code: "(data['short_ma'] > data['long_ma']) & (data['short_ma'].shift(1) <= data['long_ma'].shift(1))"
+      sell:
+        code: "(data['short_ma'] < data['long_ma']) & (data['short_ma'].shift(1) >= data['long_ma'].shift(1))"
+    position_sizing:
+      type: "fixed"
+      value: 0.1 

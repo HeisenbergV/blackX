@@ -1,0 +1,26 @@
+strategies:
+  rsi_strategy:
+    name: "RSI超买超卖策略"
+    description: "使用RSI指标的超买超卖信号进行交易"
+    parameters:
+      rsi_period: 14
+      overbought: 70
+      oversold: 30
+    indicators:
+      - name: "RSI指标"
+        code: |
+          delta = data['close'].diff()
+          gain = (delta.where(delta > 0, 0)).rolling(window=params['rsi_period']).mean()
+          loss = (-delta.where(delta < 0, 0)).rolling(window=params['rsi_period']).mean()
+          rs = gain / loss
+          data['rsi'] = 100 - (100 / (1 + rs))
+        params:
+          rsi_period: 14
+    signals:
+      buy:
+        code: "data['rsi'] < params['oversold']"
+      sell:
+        code: "data['rsi'] > params['overbought']"
+    position_sizing:
+      type: "fixed"
+      value: 0.1 

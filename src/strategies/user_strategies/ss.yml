@@ -1,0 +1,21 @@
+strategies:
+  my_strategy:
+    name: "我的自定义策略"
+    description: "这是一个自定义策略"
+    parameters:
+      param1: 10
+      param2: 20
+    indicators:
+      - name: "自定义指标"
+        code: |
+          data['my_indicator'] = data['close'].rolling(window=params['param1']).mean()
+        params:
+          param1: 10
+    signals:
+      buy:
+        code: "data['my_indicator'] > data['close']"
+      sell:
+        code: "data['my_indicator'] < data['close']"
+    position_sizing:
+      type: "fixed"
+      value: 0.1

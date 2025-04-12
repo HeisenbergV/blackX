@@ -5,26 +5,41 @@ from typing import Dict, List, Any
 from pathlib import Path
 
 class StrategyEngine:
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str = None):
         """初始化策略引擎
         
         Args:
-            config_path: 策略配置文件路径
+            config_path: 策略配置文件路径，如果为None则自动加载所有策略
         """
-        self.config = self._load_config(config_path)
+        self.config = self._load_all_configs(config_path)
         
-    def _load_config(self, config_path: str) -> Dict:
-        """加载策略配置文件
+    def _load_all_configs(self, config_path: str = None) -> Dict:
+        """加载所有策略配置
         
         Args:
-            config_path: 配置文件路径
+            config_path: 指定的配置文件路径
             
         Returns:
-            Dict: 配置信息
+            Dict: 合并后的配置信息
         """
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return yaml.safe_load(f)
-            
+        config = {'strategies': {}}
+        
+        # 从 user_strategies 目录加载所有策略
+        user_strategy_dir = Path("src/strategies/user_strategies")
+        if user_strategy_dir.exists():
+            for strategy_file in user_strategy_dir.glob("*.y*ml"):  # 支持 .yaml 和 .yml
+                with open(strategy_file, 'r', encoding='utf-8') as f:
+                    strategy_config = yaml.safe_load(f)
+                    config['strategies'].update(strategy_config.get('strategies', {}))
+        
+        # 如果指定了配置文件，则加载
+        if config_path is not None:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                specified_config = yaml.safe_load(f)
+                config['strategies'].update(specified_config.get('strategies', {}))
+        
+        return config
+        
     def _execute_code(self, code: str, local_vars: Dict) -> Any:
         """执行代码片段
         
