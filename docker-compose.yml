@@ -16,8 +16,7 @@ services:
       - PYTHONPATH=/app
     command: streamlit run src/streamlit_app.py --server.port=8501 --server.address=0.0.0.0
     depends_on:
-      blackx-api:
-        condition: service_healthy
+      - blackx-api
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501"]
@@ -39,10 +38,4 @@ services:
     environment:
       - PYTHONPATH=/app
     command: python src/api_server.py
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/docs"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s 
+    restart: unless-stopped 
