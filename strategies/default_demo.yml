@@ -1,0 +1,47 @@
+strategies:
+  demo_strategy:
+    name: "示例策略"
+    type: "ma_crossover"
+    description: "这是一个示例策略，展示了如何配置一个完整的交易策略"
+    parameters:
+      fast_period: 5
+      slow_period: 20
+      rsi_period: 14
+      overbought: 70
+      oversold: 30
+    indicators:
+      - name: "短期均线"
+        code: |
+          data['ma_fast'] = data['close'].rolling(window=params['fast_period']).mean()
+        params:
+          fast_period: 5
+      - name: "长期均线"
+        code: |
+          data['ma_slow'] = data['close'].rolling(window=params['slow_period']).mean()
+        params:
+          slow_period: 20
+      - name: "RSI指标"
+        code: |
+          # 计算价格变化
+          delta = data['close'].diff()
+          
+          # 分离上涨和下跌
+          gain = (delta.where(delta > 0, 0)).rolling(window=params['rsi_period']).mean()
+          loss = (-delta.where(delta < 0, 0)).rolling(window=params['rsi_period']).mean()
+          
+          # 计算相对强度
+          rs = gain / loss
+          
+          # 计算RSI，处理除零情况
+          rsi = 100 - (100 / (1 + rs))
+          
+          # 填充初始NaN值为50（中性值）
+          data['rsi'] = rsi.fillna(50)
+        params:
+          rsi_period: 14
+    signals:
+      buy: "(data['ma_fast'] > data['ma_slow']) & (data['rsi'] < params['oversold'])"
+      sell: "(data['ma_fast'] < data['ma_slow']) & (data['rsi'] > params['overbought'])"
+    position_sizing:
+      type: "fixed"
+      value: 0.1 

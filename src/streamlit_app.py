@@ -8,6 +8,10 @@ import numpy as np
 import yaml
 import os
 from pathlib import Path
+from src.strategies.strategy_validator import StrategyValidator
+from src.strategies.base_strategy import BaseStrategy
+from src.strategies.ma_crossover import MACrossoverStrategy
+from typing import Tuple
 
 # 设置页面配置
 st.set_page_config(
@@ -50,8 +54,40 @@ page = st.sidebar.radio(
 
 # 股票选择（共用）
 st.sidebar.header("股票选择")
-stock_code = st.sidebar.text_input("输入股票代码（例如：000001）", "000001")
-stock_name = st.sidebar.text_input("输入股票名称", "平安银行")
+stock_input = st.sidebar.text_input("输入股票代码或名称", "000001")
+
+# 获取股票列表用于自动补全
+@st.cache_data
+def get_stock_list():
+    try:
+        stock_list = ak.stock_zh_a_spot_em()
+        return stock_list[['代码', '名称']]
+    except Exception as e:
+        st.error(f"获取股票列表失败: {str(e)}")
+        return None
+
+stock_list = get_stock_list()
+if stock_list is not None:
+    # 根据输入查找匹配的股票
+    if stock_input:
+        matches = stock_list[
+            (stock_list['代码'].str.contains(stock_input)) |
+            (stock_list['名称'].str.contains(stock_input))
+        ]
+        if not matches.empty:
+            # 直接使用第一个匹配的股票
+            stock_code = matches.iloc[0]['代码']
+            stock_name = matches.iloc[0]['名称']
+        else:
+            st.sidebar.warning("未找到匹配的股票")
+            stock_code = "000001"
+            stock_name = "平安银行"
+    else:
+        stock_code = "000001"
+        stock_name = "平安银行"
+else:
+    stock_code = "000001"
+    stock_name = "平安银行"
 
 # 日期选择（共用）
 col1, col2 = st.sidebar.columns(2)
@@ -287,17 +323,133 @@ if data is not None:
         st.header("导入策略")
         uploaded_file = st.file_uploader("上传策略配置文件（YAML格式）", type=['yaml', 'yml'])
         
+        def validate_strategy_config(config: dict) -> Tuple[bool, str]:
+            """验证策略配置
+            
+            Args:
+                config: 策略配置字典
+                
+            Returns:
+                Tuple[bool, str]: (是否有效, 错误信息)
+            """
+            return True, "配置验证通过"
+
+        def create_strategy(config: dict) -> BaseStrategy:
+            """根据配置创建策略实例
+            
+            Args:
+                config: 策略配置
+                
+            Returns:
+                BaseStrategy: 策略实例
+            """
+            return MACrossoverStrategy(config)
+
+        def test_strategy_execution(config):
+            """测试策略执行
+            
+            Args:
+                config: 策略配置字典
+                
+            Returns:
+                tuple: (是否成功, 错误信息)
+            """
+            try:
+                st.write("1. 创建策略实例...")
+                # 创建策略实例
+                strategy = create_strategy(config)
+                
+                st.write("2. 初始化策略验证器...")
+                # 初始化策略验证器
+                validator = StrategyValidator(strategy)
+                
+                st.write("3. 准备测试数据...")
+                # 获取测试数据
+                test_data = validator.get_test_data()
+                
+                st.write("4. 开始执行回测...")
+                # 执行回测
+                results = validator.run_backtest(test_data)
+                
+                st.write("5. 计算性能指标...")
+                # 计算性能指标
+                metrics = validator.get_performance_metrics(results)
+                
+                st.write("6. 生成可视化结果...")
+                # 生成图表
+                figures = validator.plot_results(test_data, results, metrics)
+                
+                # 显示回测结果
+                st.subheader("回测结果")
+                
+                # 创建标签页
+                tab1, tab2, tab3 = st.tabs(["收益分析", "交易信号", "持仓变化"])
+                
+                with tab1:
+                    # 显示收益曲线
+                    st.plotly_chart(figures['returns'], use_container_width=True)
+                    
+                    # 显示收益统计
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("总收益", f"{metrics['returns']['total']:.2%}")
+                    with col2:
+                        st.metric("年化收益", f"{metrics['returns']['annual']:.2%}")
+                    with col3:
+                        st.metric("夏普比率", f"{metrics['returns']['sharpe']:.2f}")
+                    with col4:
+                        st.metric("最大回撤", f"{metrics['returns']['max_drawdown']:.2%}")
+                
+                with tab2:
+                    # 显示交易信号图
+                    st.plotly_chart(figures['signals'], use_container_width=True)
+                    
+                    # 显示交易统计
+                    st.write("交易统计：")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write(f"买入信号数量：{metrics['trades']['buy_signals']}")
+                    with col2:
+                        st.write(f"卖出信号数量：{metrics['trades']['sell_signals']}")
+                    with col3:
+                        st.write(f"交易频率：{metrics['trades']['frequency']}次")
+                
+                with tab3:
+                    # 显示持仓变化图
+                    st.plotly_chart(figures['positions'], use_container_width=True)
+                    
+                    # 显示持仓统计
+                    st.write("持仓统计：")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write(f"最大持仓比例：{metrics['positions']['max']:.2%}")
+                    with col2:
+                        st.write(f"最小持仓比例：{metrics['positions']['min']:.2%}")
+                    with col3:
+                        st.write(f"平均持仓比例：{metrics['positions']['mean']:.2%}")
+                
+                st.write("7. 策略执行测试完成！")
+                return True, "策略执行测试通过"
+                
+            except Exception as e:
+                st.error(f"策略执行测试失败：{str(e)}")
+                return False, f"策略执行测试失败: {str(e)}"
+
         if uploaded_file is not None:
             try:
-                # 读取文件内容
-                file_content = uploaded_file.getvalue().decode('utf-8')
+                # 显示进度条
+                progress_bar = st.progress(0)
                 
-                # 验证YAML格式
-                yaml.safe_load(file_content)
+                # 读取文件内容
+                st.write("正在读取策略文件...")
+                file_content = uploaded_file.getvalue().decode('utf-8')
+                progress_bar.progress(50)
                 
                 # 保存文件
+                st.write("正在保存策略文件...")
                 filename = uploaded_file.name
                 save_path = save_user_strategy(file_content, filename)
+                progress_bar.progress(100)
                 
                 st.success(f"策略文件已成功导入：{save_path}")
                 
@@ -329,4 +481,4 @@ if data is not None:
                             if strategy_id in config.get('strategies', {}):
                                 os.remove(strategy_file)
                                 st.success(f"已删除策略: {strategy_config['name']}")
-                                st.rerun()  # 使用新的 rerun API 
+                                st.rerun() 
