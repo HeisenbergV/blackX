@@ -4,6 +4,7 @@ from datetime import datetime
 import akshare as ak
 import pandas as pd
 import uvicorn
+from pathlib import Path
 
 # 创建 FastAPI 应用
 app = FastAPI()
@@ -16,6 +17,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 创建策略目录
+STRATEGY_DIR = Path("strategies")
+STRATEGY_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_stock_data(code, start_date, end_date):
     """获取股票数据"""

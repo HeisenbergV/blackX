@@ -24,20 +24,37 @@ wheels/
 venv/
 ENV/
 env/
-.env
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-.DS_Store
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# Docker
+.docker/
+
+# Data
+data/
+*.csv
+*.xlsx
+*.db
 
 # Logs
 *.log
+logs/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints
 
 # Local development settings
 .env
@@ -46,7 +63,6 @@ env/
 # Streamlit
 .streamlit/
 
-# Test coverage
-.coverage
-htmlcov/
-.pytest_cache/ 
+# Strategies
+strategies/*.yml
+!strategies/default_*.yml 

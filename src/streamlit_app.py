@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 # 创建策略目录
-STRATEGY_DIR = Path("src/strategies/user_strategies")
+STRATEGY_DIR = Path("strategies")
 STRATEGY_DIR.mkdir(parents=True, exist_ok=True)
 
 # 加载所有策略配置

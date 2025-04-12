@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  blackx-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blackx-web
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./strategies:/app/strategies
+    environment:
+      - PYTHONPATH=/app
+    command: streamlit run src/streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+    depends_on:
+      blackx-api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  blackx-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blackx-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./strategies:/app/strategies
+    environment:
+      - PYTHONPATH=/app
+    command: python src/api_server.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s 
