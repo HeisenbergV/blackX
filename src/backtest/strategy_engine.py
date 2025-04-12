@@ -24,19 +24,29 @@ class StrategyEngine:
         """
         config = {'strategies': {}}
         
-        # 从 user_strategies 目录加载所有策略
-        user_strategy_dir = Path("src/strategies/user_strategies")
-        if user_strategy_dir.exists():
-            for strategy_file in user_strategy_dir.glob("*.y*ml"):  # 支持 .yaml 和 .yml
+        # 从 strategies 目录加载所有策略
+        strategy_dir = Path("strategies")
+        if strategy_dir.exists():
+            for strategy_file in strategy_dir.glob("*.y*ml"):  # 支持 .yaml 和 .yml
                 with open(strategy_file, 'r', encoding='utf-8') as f:
                     strategy_config = yaml.safe_load(f)
-                    config['strategies'].update(strategy_config.get('strategies', {}))
+                    if 'strategies' in strategy_config:
+                        config['strategies'].update(strategy_config['strategies'])
+                    else:
+                        # 如果配置中没有strategies字段，则使用整个配置作为一个策略
+                        strategy_name = strategy_file.stem
+                        config['strategies'][strategy_name] = strategy_config
         
         # 如果指定了配置文件，则加载
         if config_path is not None:
             with open(config_path, 'r', encoding='utf-8') as f:
                 specified_config = yaml.safe_load(f)
-                config['strategies'].update(specified_config.get('strategies', {}))
+                if 'strategies' in specified_config:
+                    config['strategies'].update(specified_config['strategies'])
+                else:
+                    # 如果配置中没有strategies字段，则使用整个配置作为一个策略
+                    strategy_name = Path(config_path).stem
+                    config['strategies'][strategy_name] = specified_config
         
         return config
         
@@ -90,10 +100,20 @@ class StrategyEngine:
             'params': strategy_config['parameters'],
             'result': None
         }
-        buy_condition = self._execute_code(
-            f"result = {strategy_config['signals']['buy']['code']}",
-            local_vars
-        )
+        
+        # 处理不同的信号格式
+        buy_signal = strategy_config['signals']['buy']
+        if isinstance(buy_signal, dict) and 'code' in buy_signal:
+            buy_condition = self._execute_code(
+                f"result = {buy_signal['code']}",
+                local_vars
+            )
+        else:
+            buy_condition = self._execute_code(
+                f"result = {buy_signal}",
+                local_vars
+            )
+            
         if buy_condition is not None:
             signals.loc[buy_condition, 'signal'] = 1
             
@@ -103,10 +123,20 @@ class StrategyEngine:
             'params': strategy_config['parameters'],
             'result': None
         }
-        sell_condition = self._execute_code(
-            f"result = {strategy_config['signals']['sell']['code']}",
-            local_vars
-        )
+        
+        # 处理不同的信号格式
+        sell_signal = strategy_config['signals']['sell']
+        if isinstance(sell_signal, dict) and 'code' in sell_signal:
+            sell_condition = self._execute_code(
+                f"result = {sell_signal['code']}",
+                local_vars
+            )
+        else:
+            sell_condition = self._execute_code(
+                f"result = {sell_signal}",
+                local_vars
+            )
+            
         if sell_condition is not None:
             signals.loc[sell_condition, 'signal'] = -1
             
